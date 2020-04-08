@@ -1,0 +1,21 @@
+function y = bspline3( x )
+% BSPLINE3 función B-spline de order 3
+%
+%Entradas
+%x: valores de entrada a modificar
+%
+%Salidas
+%y: valores bspline correspondientes
+
+%precomputacion del valor absoluto
+val=abs(x);
+
+y = zeros(size(x));
+% rango de valores no nulos del bspline
+x0range = val < 1;
+x1range = val >=1 & val<2;
+
+% asigno valores a los rangos
+y(x0range) = 0.6666 - val(x0range).^2 + 0.5*val(x0range).^3;
+y(x1range) = (2-val(x1range)).*(2-val(x1range)).*(2-val(x1range))/6;
+end

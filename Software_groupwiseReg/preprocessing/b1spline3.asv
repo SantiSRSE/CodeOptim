@@ -1,0 +1,26 @@
+function y = b1spline3( x )
+% función B-spline de orden 3
+
+%precomputacion del valor absoluto
+val=abs(x);
+
+y = zeros(size(x));
+tic
+% rango de valores no nulos del bspline
+x0range = val < 1;
+x1range = val >=1 & val<2;
+
+% asigno valores a los rangos
+y(x0range) = 1.5*sign(x(x0range)).*x(x0range).^2 -2*x(x0range);
+y(x1range) = (x(x1range)-2.*sign(x(x1range))).^2/2.*(-sign(x(x1range)));
+toc
+tic
+% rango de valores no nulos del bspline
+x0range = val < 1;
+x1range = val >=1 & val<2;
+
+% asigno valores a los rangos
+y(x0range) = 1.5*sign(x(x0range)).*x(x0range).^2 -2*x(x0range);
+y(x1range) = (x(x1range)-2.*sign(x(x1range))).^2/2.*(-sign(x(x1range)));
+toc
+end

@@ -1,0 +1,38 @@
+function cost_total = cost( V,mask,ts )
+% COST determines the total cost of a given metric array 
+%
+%Input
+%V: metric array
+%mask: determines the subset to take into account
+%ts: bsplines variables  struct, only in 6 %dimensional case
+%
+%Output
+%cost_total:total cost for each frame with 1,2 o 4 dimensiones 
+
+%Avoid NaN 
+V(isnan(V))=0;
+
+if ndims(V)==2
+    %Sum of the metric values only in the ROI
+    cost_total=sum(sum(V.*mask));
+elseif ndims(V)==4   
+    %dH (cost) traslational and rigid
+    %Sum of the metric values only in the ROI for each iamge and dimensi
+
+    Aux=permute(sum(sum(bsxfun(@times,V,mask),2),1),[3 4 1 2]);
+    cost_total=Aux(:,:,1,1);        
+elseif ndims(V)==6
+    tam=size(V);
+    cost_total=zeros(tam(5),tam(4),tam(3),tam(6)); %inicialización del coste de los gradientes
+    V=permute(V,[1 2 4 5 3 6]);%recolocación dimensional; dH sale [py px N L] y dV viene [y x N px py L]
+        
+    %Se suman los valores de la ROI para cada imagen y cada dimension y para cada punto de la malla
+    for k=1:tam(5) %py
+        for l=1:tam(4) %px
+            %Matriz auxiliar de tamaño 1 1 1 1 N L
+            Aux=repmat(mask(ts.coefg{2}(k,1):ts.coefg{2}(k,2),ts.coefg{1}(l,1):ts.coefg{1}(l,2)),[1 1 1 1 tam(3) tam(6)]);
+            
+            cost_total(k,l,:,:)=sum(sum(V(1:ts.coefg{2}(k,2)-ts.coefg{2}(k,1)+1,1:ts.coefg{1}(l,2)-ts.coefg{1}(l,1)+1,l,k,:,:).*Aux,2),1);
+        end
+    end    
+end

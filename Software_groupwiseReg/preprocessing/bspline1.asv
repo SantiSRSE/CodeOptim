@@ -1,0 +1,16 @@
+function y = bspline1( x )
+% función B-spline function of 1st order
+
+y = zeros(size(x));
+%precomputacion del valor absoluto
+val=abs(x);
+
+% rango de valores no nulos del bspline
+x0range = val < 1;
+
+% asigno valor al rango
+y(x0range) = 1-val(x0range);
+
+
+end
+

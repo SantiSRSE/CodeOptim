@@ -1,0 +1,17 @@
+function y = bspline2( x )
+% B-spline function of 2nd order
+
+y = zeros(size(x));
+
+%Santi: mejor computar abs(x) y almacenarlo en una variable para no repetir
+%la operacion (y tomar abs(x1) de ahi)
+val=abs(x);
+
+x0range = val < 0.5;
+x1range = val >=0.5 & abs(x)<1.5;
+x0 = x(x0range);
+%x1 = x(x1range);
+y(x0range) = -x0.^2 + 0.75;
+y(x1range) = 0.5*(val(x1range)-1.5).^2;
+
+end

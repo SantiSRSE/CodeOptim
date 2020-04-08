@@ -1,0 +1,13 @@
+function y = b1spline1( x )
+% B1SPLINE1 función derivada primera B-spline de orden 1
+%
+%Entradas
+%x: valores de 
+y = zeros(size(x));
+
+% rango de valores no nulos del bspline 
+x0range = abs(x)<1;
+% asignar el valor al rango 
+y(x0range)=-sign(x(x0range));
+
+end

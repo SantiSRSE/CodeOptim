@@ -1,0 +1,26 @@
+function y = b1spline2( x )
+% función primera derivada B-spline de orden 2
+
+y = zeros(size(x));
+tic
+% rango de valores no nulos del bspline
+x0range = abs(x) <= 0.5;
+x1range = x <-0.5 & x>=-1.5;
+x2range = x >=0.5 & x<1.5;
+
+% asigno valores a los rangos
+y(x0range) = -2*x(x0range);
+y(x1range) = x(x1range)+1.5;
+y(x2range) = x(x2range)-1.5;
+toc
+tic
+val=abs(x);
+% rango de valores no nulos del bspline
+x0range = val < 0.5;
+x1range = val >=0.5 & val<1.5;
+
+% asigno valores a los rangos
+y(x0range) = -2*x(x0range).^2 + 0.75;
+y(x1range) = x(x1range)-1.5*sign(x(x1range));
+toc
+end

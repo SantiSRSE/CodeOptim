@@ -1,0 +1,21 @@
+function y = b2spline2( x )
+% B2SPLINE2 second derivative da B-spline de orden 2
+%
+%Entradas
+%x: valores de entrada a modificar
+%
+%Salidas
+%y: valores bspline correspondientes
+
+%precomputacion del valor absoluto
+y = zeros(size(x));
+
+val=abs(x);
+% rango de valores no nulos del bspline
+x0range = val < 0.5;
+x1range = val >=0.5 & val<1.5;
+
+% asignar valores a los rangos
+y(x0range) = -2;
+y(x1range) = 1;
+end

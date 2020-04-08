@@ -1,0 +1,33 @@
+function [ dx1, dx2 ] = gradient_image( IT,I,x,ts,T,caja,version2 )
+% GRADIENT_IMAGE gradient (horizontal and vertical) of the images
+%
+%input
+%IT: images
+%
+%output
+%dx1: gradient in horizontal direction 
+%dx2: gradient in vertical direction 
+
+L=ndims(I)-1;
+%tic
+if version2==0
+    [dx1, dx2]=gradient(IT); % gradient of transformed images
+else
+    [d1, d2]=gradient(I); % transformed gradient of the images
+    [xn, ~] = transformatiionr( x,ts,T,caja,1 );
+    if L==2
+        dx1 = interpolar( x,xn,d1,'linear',caja);
+        dx2 = interpolar( x,xn,d2,'linear',caja);
+    elseif L==3
+        dx1 = interpolar( x,xn,d1,'linear',caja);
+        dx2 = interpolar( x,xn,d2,'linear',caja);
+        dx3 = interpolar( x,xn,d3,'linear',caja);
+    end
+    
+end
+
+
+end
+
+
+

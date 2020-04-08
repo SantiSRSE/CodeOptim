@@ -1,0 +1,92 @@
+function [xn, TAux] = transformation( x,ts,T,bound_box,flagopt )
+% TRANSFORMATION generate a new control point mesh from the original
+% according to their displacements
+%
+%input
+%x: initial mesh 
+%ts: bspline variables struct 
+%T: transformation matrix  with  displacements
+%bound_box: determine the region of interest
+%flagopt: flag activating low memory method (active in zero)
+%
+%output
+%xn: new mesh generated from transformation
+%TAux: matrix with new values reshaped to fit 
+
+%Value of N, according to transformation 
+if  ndims(T)==2   
+    N=size(T,2);
+else
+    N=size(T,3);
+end
+%inicialisation of xn
+tama=size(x);
+L=tama(3);
+xn=zeros(tama(1),tama(2),N,L);
+TAux=0;
+
+switch ts.type
+    case 't' %traslational
+        %tic
+        for k=1:N
+            for l=1:2
+                xn(:,:,k,l)=x(:,:,l)+T(l,k);%displacement of pixels 
+            end
+        end    
+     case 'tyr' %rigid
+        %c and x (coord xy) for precomputation
+        resta(:,:,1)=x(:,:,1)-ts.c(1);
+        resta(:,:,2)=x(:,:,2)-ts.c(2);
+        for k=1:N
+            %precomputing sinus cosines 
+            coseno=cos(T(3,k));
+            seno=-sin(T(3,k));
+            xn(:,:,k,1)=coseno*resta(:,:,1)-seno*resta(:,:,2)+ts.c(1)+T(1,k); %desplazamiento de pixel en horizontal (l=1)
+            xn(:,:,k,2)=seno*resta(:,:,1)+coseno*resta(:,:,2)+ts.c(2)+T(2,k);%y vertical (l=2)        
+        end  
+    case 'b'
+        
+        if (flagopt)% normal procedure
+            r{1}=bound_box(1,1):bound_box(1,2);
+            r{2}=bound_box(2,1):bound_box(2,2);
+           
+            tic
+            %TAux: auxiliar variable of size ts.BB with the values of T
+            TAux=zeros(size(r{2},2),size(r{1},2),N,2,ts.E+1,ts.E+1,'single');
+            for k=0:ts.E
+               for l=0:ts.E
+                   TAux(:,:,:,:,l+1,k+1)=T(k+ts.coef{2}(r{2},1),l+ts.coef{1}(r{1},1),:,:);
+               end
+            end
+            %Se opera para obtenter xn
+            xn(r{2},r{1},:,:)=sum(sum(TAux.*ts.BB(r{2},r{1},:,:,:,:),5),6);
+            toc
+        else %prodedimiento de baja memoria
+            for m=1:L
+                ts.coef{m}(ts.coef{m}(:,1)<0,1)=0; %Se modifican los coeficientes para eliminar efectos de bordes
+                ts.coef{m}(ts.coef{m}(:,1)>ts.coef{m}(bound_box(m,2),1)+1,1)=ts.coef{m}(bound_box(m,2),1)+1;
+                ts.coef{m}=ts.coef{m}+1;
+            end
+            tic
+            ts.BB=permute(ts.BB,[6 5 3 4 2 1]); %recoloco ts.BB          
+            %Fuera del rango,T vale 0 para una transición suave.
+            TAux=zeros(size(T)+[2 2 0 0]);
+            TAux(2:end-1,2:end-1,:,:)=T;
+            Dp=ceil(ts.Dp);
+            %procedimiento alternativo de baja memoria para la iteracion final
+            for m=bound_box(1,1)-Dp(1):bound_box(1,2)+Dp(1) %margen de Dp
+                for n=bound_box(2,1)-Dp(2):bound_box(2,2)+Dp(2)
+                    xn(n,m,:,:)=sum(sum(ts.BB(:,:,:,:,m,n).*TAux(ts.coef{2}(n,1):ts.coef{2}(n,1)+ts.E,ts.coef{1}(m,1):ts.coef{1}(m,1)+ts.E,:,:),2),1);
+                end
+            end
+            toc
+       
+        end
+        xn=permute(repmat(x,[1 1 1 N]),[1 2 4 3])+xn;
+
+    otherwise
+        sprintf('argumento no valido, prueba otra vez')
+        error('t para traslacion, r para rotacion, tyr para ambas y b para bspline')
+end
+
+%xn=gather(xnGPU);

@@ -1,0 +1,31 @@
+function IT = interpolator( x,xn,I,interpolation,bound_box)
+% INTERPOLATOR interpolate a mesh over the images ( original mesh) to 
+% generate new imáges corresponding to the new mesh
+%
+%Input
+%x: initial mesh
+%xn:final mesh
+%I: imáges 
+%interpolatión: method of de interpolación; lineal, cúbico,...
+%caja: determina la zona de las imágenes donde se operará
+%
+%Salidas
+%IT: imágenes transformada según la malla xn
+
+tam=size(I);
+if ndims(I)==2
+    tam=[tam 1];
+end
+IT=I;%matriz imagenes transformadas
+margen=ceil(tam/40);% cáulculo de un 2.5%de la imagen
+r{1}=bound_box(2,1)-margen(1):bound_box(2,2)+margen(1);%margen según el tamaño de la imagen
+r{2}=bound_box(1,1)-margen(2):bound_box(1,2)+margen(2);
+for k=1:tam(3)
+    %Santi: he leido que la funcion interp2 tiene soporte en GPUs en
+    %MATLABR2013b, pero aun no he podido "comprar" esta version.
+    IT(r{1},r{2},k)=interp2(x(r{1},r{2},1),x(r{1},r{2},2),I(r{1},r{2},k),xn(r{1},r{2},k,1),xn(r{1},r{2},k,2),interpolation);
+    %interpolación lineal (por defecto), posibles desbordamientos con NaN     
+    
+end
+
+

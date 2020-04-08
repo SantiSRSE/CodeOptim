@@ -1,0 +1,44 @@
+function V = metric( IT,data,term,bound_box )
+% METRICA metric calculation for a given image set
+%
+%Entradas
+%IT: images for metric calculation
+%data: struct that stores the metric 
+%term: matriz that stores the regularization terms
+%bound_box: ROI
+%
+%Salidas
+%V: metric at each pixel
+tic
+tam=size(IT);
+V=zeros(tam(1),tam(2));%initialisation
+
+switch data.metric
+    case 'variance'
+        %variance of the images        
+        media=mean(IT,3);       
+        for k=1:tam(3)
+             V=V+(IT(:,:,k)-media).^2;
+        end
+        V=V/tam(3);                
+       
+    case 'reference'
+        V=mean((IT-term.ref).^2,3);
+                           
+    otherwise
+        sprintf('error')
+
+end
+
+%smooth terms added
+if sum(term.landa)~=0
+    size(term.dtaux), size(term.dtaux2), size(term.dtauxy), size(term.dtaut), size(term.dtaut2), size(V), bound_box
+    V(),bound_box(1,1):bound_box(1,2))=V(bound_box(2,1):bound_box(2,2),bound_box(1,1):bound_box(1,2))+ ...
+        sum(sum(( term.landa(1)*sum((term.dtaux(bound_box(2,1):bound_box(2,2),bound_box(1,1):bound_box(1,2),:,:).^2),5)+ ...
+        term.landa(2)*sum((term.dtaux2(bound_box(2,1):bound_box(2,2),bound_box(1,1):bound_box(1,2),:,:).^2),5)+ ...
+        term.landa(2)*2*(term.dtauxy(bound_box(2,1):bound_box(2,2),bound_box(1,1):bound_box(1,2),:,:).^2)+ ...
+        (term.dtaut2(bound_box(2,1):bound_box(2,2),bound_box(1,1):bound_box(1,2),:,:).^2)*term.landa(4) + ...
+        (term.dtaut(bound_box(2,1):bound_box(2,2),bound_box(1,1):bound_box(1,2),:,:).^2)*term.landa(3)),4),3);
+end
+
+toc

@@ -1,0 +1,32 @@
+function [X, areaX, bound_box]=set_mask(radius,Im_size)
+% MASCARA dibuja un círculo de cierto radio con unos en el centro de una matriz 
+%
+%Entradas
+%radio: indica el radio del círculo de unos 
+%tam: tamaño de la matriz donde se dibuja el círculo
+%
+%Salidas
+%X: matriz devuelta donde los unos indican el interior del círculo y los
+%ceros el exterior
+%areaX: Area del circulo correspondiente a la suma de todos los elementos de la matriz 
+%caja: bounding box sobre el círculo que le circunscribe 
+
+radius2=radius^2;%precómputo del radio al cuadrado
+%coordenadas del centro
+center=[(Im_size(2)+1)/2 (Im_size(1)+1)/2];
+
+%trazo la malla de distancias al centro para cada pixel
+[C D]=meshgrid((1-center(1):Im_size(2)-center(1)).^2,(1-center(2):Im_size(1)-center(2)).^2);
+
+%valores interiores a la ROI -> 1, exteriores ->0
+X=double(C+D<=radius2);
+
+[A(:,2), A(:,1)]=find (X==1);
+bound_box=zeros(2,2);
+%Caja: valores límite de la ROI
+for l=1:2
+    bound_box(l,1)=min(A(:,l));
+    bound_box(l,2)=max(A(:,l));
+end
+areaX=sum(sum(X));%area de la ROI
+        

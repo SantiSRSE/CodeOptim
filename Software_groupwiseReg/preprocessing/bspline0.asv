@@ -1,0 +1,8 @@
+function y = bspline0(x)
+%función bspline de orden 0 para pruebas
+y = zeros(size(x));
+% rango de valores no nulos del bspline
+x0range = abs(x) < 0.5;
+% asigno valor al rango
+y(x0range) = 1;
+end
