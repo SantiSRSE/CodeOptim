@@ -1,0 +1,165 @@
+%function dV = gradientBSpline( IT,I,rec,ts,datos,T0,PuntosC,term,xTconj,gpu )
+function [dt,G,Gd]= gradientBSpline(rec,xT,tR,r,flag)
+% GRADIENTE se encarga del ensamblado de cada una de las partes
+% involucradas en el c�lculo del gradiente, tanto el gradiente de la imagen
+% como el de la m�trica y el de la transformaci�n, teniendo en cuenta los
+% t�rminos de suavidad
+%
+%Entradas
+%x: malla de pixeles inicial 
+%IT: matriz de im�genes
+%ts: estructura de almacenamiento de las variables bspline, involucradas
+%s�lo en la transformaci�n bspline
+%datos: estructura que almacena el tipo de transformaci�n y la m�trica
+%utilizada
+%T: matriz de transformaci�n con los desplazamientos
+%term: estructura que almacena todas las variables implicadas en el c�lculo
+%de los t�rminos de suavidad espacial y temporal, s�lo para bsplines
+%
+%Salidas
+%dV: gradiente total de las im�genes empleado en el m�todo del gradiente
+%descendente
+
+gpu=isa(rec.x,'gpuArray');
+if gpu;gpu=2;end
+
+gpu=2;
+
+%IMAGE GRADIENT
+if rec.NDimen==2
+    [dx(:,:,:,:,:,2),dx(:,:,:,:,:,1)]=gradient(xT);dx(:,:,:,:,:,3)=0;
+else
+    [dx(:,:,:,:,:,2),dx(:,:,:,:,:,1),dx(:,:,:,:,:,3)]=gradient(xT);%Sixth dimension for directions of space
+end
+
+NG=size(rec.tS.BBg);NG(end+1:9)=1;
+
+%PRECOMPUTE THE FOURIER TRANSFORMS AND THE ARRAYS
+coefgr=cell(1,3);dim=cell(1,3);
+BBg=cell(3,max(NG(6:8)));F=cell(2,max(NG(6:8)));
+for s=1:3
+    for n=1:NG(5+s);coefgr{s}=rec.tS.coefgr{s}(n,1):rec.tS.coefgr{s}(n,2);dim{s}=rec.tS.dim{s}(n,1):rec.tS.dim{s}(n,2);
+        BBg{s}{n}=dynInd(rec.tS.BBgs{s},{dim{s},n},[s 5+s]); % precompute dtheta for the jacobian
+        if (s==3) && (rec.NDimen==2), continue, end
+        F{s}{n}=bsxfun(@times,rec.F{s}(:,coefgr{s}),BBg{s}{n}(:)');
+    end
+end
+
+permA=1:9;permA([6 9])=[9 6];
+permB=1:9;permB([4 9])=[9 4];
+
+
+if flag>0 %no residuals, compute jacobian
+    Sg=bsxfun(@times,rec.S,dx(:,:,:,:,flag,:)); %precompute the coils
+    clear dx
+    % rec.tS.N instead of 1
+    G=zeros([rec.NY(1:3) rec.Nco 1 NG(6:8) rec.tS.L],'like',rec.x);
+    if any(rec.Field.lambda~=0);Gd=zeros([ones(1,4) 1 NG(6:8) rec.tS.L],'like',rec.x);else, Gd=[];end
+    
+    for n=1:NG(8);coefgr{3}=rec.tS.coefgr{3}(n,1):rec.tS.coefgr{3}(n,2);
+        if rec.NDimen==2
+            Sg3=bsxfun(@times,Sg(:,:,coefgr{3},:,:,:),BBg{3}{n}); %reshape operator (no subs 2rd dimen), no need FFT
+        elseif rec.NDimen==3
+            %if gpu==2
+            Sg3=fftGPU(Sg(:,:,coefgr{3},:,:,:),3,gpu,F{3}{n}); % trimmed fft over third gpu
+            %elseif gpu==0
+            %    Sg3=fftGPU(Sg(:,:,coefgr{3},:,:,:),3,2,F{3}{n});
+            %end
+        end
+        
+        for l=1:NG(7);coefgr{2}=rec.tS.coefgr{2}(l,1):rec.tS.coefgr{2}(l,2);
+            %if gpu==2
+            Sg2=fftGPU(Sg3(:,coefgr{2},:,:,:,:),2,gpu,F{2}{l}); % trimmed fft over second gpu
+            %elseif gpu==0
+            %    Sg2=fftGPU(Sg3(:,coefgr{2},:,:,:,:),2,2,F{2}{l});
+            %end
+            for k=1:NG(6);coefgr{1}=rec.tS.coefgr{1}(k,1):rec.tS.coefgr{1}(k,2);
+                if rec.NDimen==2
+                    %if gpu==2
+                    G(:,:,coefgr{3},:,:,k,l,n,:)=permute(fftGPU(Sg2(coefgr{1},:,:,:,:,:),1,gpu,F{1}{k}),permA); % trimmed fft over first gpu
+                    %elseif gpu==0
+                    %    G(:,:,coefgr{3},:,:,k,l,n,:)=permute(fftGPU(Sg2(coefgr{1},:,:,:,:,:),1,2,F{1}{k}),permA);
+                    %end
+                elseif rec.NDimen==3
+                    %if gpu==2
+                    G(:,:,:,:,:,k,l,n,:)=permute(fftGPU(Sg2(coefgr{1},:,:,:,:,:),1,gpu,F{1}{k}),permA); % trimmed fft over first gpu
+                    %elseif gpu==0
+                    %    G(:,:,:,:,:,k,l,n,:)=permute(fftGPU(Sg2(coefgr{1},:,:,:,:,:),1,2,F{1}{k}),permA);
+                    %end
+                end
+                
+                %regularizacion
+                if rec.Field.lambda(1)>0 %first spatial derivative gradient
+                    jF=bsxfun(@times,tR.dr1(coefgr{1},coefgr{2},coefgr{3},:,flag,k,l,n,:).*rec.tS.BB1g(dim{1},dim{2},dim{3},:,flag,k,l,n,:));
+                    Gd(1,1,1,1,1,k,l,n,:)=Gd(1,1,1,1,1,k,l,n,:)+permute(multDimSum(jF,[1:3 9]),permB);
+                end
+                if rec.Field.lambda(2)>0 %second spatial derivative gradient
+                    jF=bsxfun(@times,tR.dr2(coefgr{1},coefgr{2},coefgr{3},:,flag,k,l,n,:),rec.tS.BB2g(dim{1},dim{2},dim{3},:,:,k,l,n,:));
+                    Gd(1,1,1,1,:,k,l,n,:)=Gd(1,1,1,1,:,k,l,n,:)+permute(multDimSum(jF,[1:3 9]),permB);
+                    jF=bsxfun(@times,tR.dr11(coefgr{1},coefgr{2},coefgr{3},:,:,k,l,n,:),rec.tS.BB11g(dim{1},dim{2},dim{3},:,:,k,l,n,:));
+                    Gd(1,1,1,1,:,k,l,n,:)=Gd(1,1,1,1,:,k,l,n,:)+permute(multDimSum(jF,[1:3 9]),permB);
+                end
+            end
+        end
+    end
+    
+    G=bsxfun(@times,G,rec.A(:,:,:,:,flag)); %aplico la mascara de shots
+    dt=0;
+else % residuals, compute gradient direction
+    
+    dt=zeros([1 1 1 1 rec.tS.N NG(6:8) rec.tS.L],'like',rec.x);
+    G=zeros([rec.NY(1:3) rec.Nco 1 1 1 1 rec.tS.L],'like',rec.x);
+    if any(rec.Field.lambda~=0);Gd=zeros([ones(1,4) rec.tS.N NG(6:8) rec.tS.L],'like',rec.x);else, Gd=[];end
+    
+    for q=1:rec.tS.N
+    Sg=bsxfun(@times,rec.S,dx(:,:,:,1,q,:)); %precompute the coils
+    for n=1:NG(8);coefgr{3}=rec.tS.coefgr{3}(n,1):rec.tS.coefgr{3}(n,2);
+        if rec.NDimen==2
+            Sg3=bsxfun(@times,Sg(:,:,coefgr{3},:,1,:),BBg{3}{n}); %reshape operator (no subs 2rd dimen), no need FFT
+        elseif rec.NDimen==3
+            %if gpu==2
+            Sg3=fftGPU(Sg(:,:,coefgr{3},:,1,:),3,gpu,F{3}{n}); % trimmed fft over third gpu
+            %elseif gpu==0
+            %    Sg3=fftGPU(Sg(:,:,coefgr{3},:,:,:),3,2,F{3}{n});
+            %end
+        end
+        
+        for l=1:NG(7);coefgr{2}=rec.tS.coefgr{2}(l,1):rec.tS.coefgr{2}(l,2);
+            %if gpu==2
+            Sg2=fftGPU(Sg3(:,coefgr{2},:,:,1,:),2,gpu,F{2}{l}); % trimmed fft over second gpu
+            %elseif gpu==0
+            %    Sg2=fftGPU(Sg3(:,coefgr{2},:,:,:,:),2,2,F{2}{l});
+            %end
+            for k=1:NG(6);coefgr{1}=rec.tS.coefgr{1}(k,1):rec.tS.coefgr{1}(k,2);
+                if rec.NDimen==2
+                    %if gpu==2
+                    G(:,:,coefgr{3},:,1,1,1,1,:)=permute(fftGPU(Sg2(coefgr{1},:,:,:,1,:),1,gpu,F{1}{k}),permA); % trimmed fft over first gpu
+                    %elseif gpu==0
+                    %    G(:,:,coefgr{3},:,:,k,l,n,:)=permute(fftGPU(Sg2(coefgr{1},:,:,:,:,:),1,2,F{1}{k}),permA);
+                    %end
+                elseif rec.NDimen==3
+                    %if gpu==2
+                    G=permute(fftGPU(Sg2(coefgr{1},:,:,:,1,:),1,gpu,F{1}{k}),permA); % trimmed fft over first gpu
+                    %elseif gpu==0
+                    %    G(:,:,:,:,:,k,l,n,:)=permute(fftGPU(Sg2(coefgr{1},:,:,:,:,:),1,2,F{1}{k}),permA);
+                    %end
+                end                
+                %G=bsxfun(@times,G,rec.A(:,:,:,:,q)); %aplico la mascara de shots
+                dt(1,1,1,1,q,k,l,n,:)=multDimSum(real(bsxfun(@times,G,r(:,:,:,:,q).*rec.A(:,:,:,:,q))),1:4);
+                
+                %regularizacion
+                if rec.Field.lambda(1)>0 %first spatial derivative gradient
+                    jF=bsxfun(@times,tR.dr1(coefgr{1},coefgr{2},coefgr{3},:,q,k,l,n,:).*rec.tS.BB1g(dim{1},dim{2},dim{3},:,q,k,l,n,:));
+                    Gd(1,1,1,1,q,k,l,n,:)=Gd(1,1,1,1,q,k,l,n,:)+permute(multDimSum(jF,[1:3 9]),permB);
+                end
+                if rec.Field.lambda(2)>0 %second spatial derivative gradient
+                    jF=bsxfun(@times,tR.dr2(coefgr{1},coefgr{2},coefgr{3},:,q,k,l,n,:),rec.tS.BB2g(dim{1},dim{2},dim{3},:,q,k,l,n,:));
+                    Gd(1,1,1,1,q,k,l,n,:)=Gd(1,1,1,1,q,k,l,n,:)+permute(multDimSum(jF,[1:3 9]),permB);
+                    jF=bsxfun(@times,tR.dr11(coefgr{1},coefgr{2},coefgr{3},:,q,k,l,n,:),rec.tS.BB11g(dim{1},dim{2},dim{3},:,q,k,l,n,:));
+                    Gd(1,1,1,1,q,k,l,n,:)=Gd(1,1,1,1,q,k,l,n,:)+permute(multDimSum(jF,[1:3 9]),permB);
+                end
+            end
+        end
+    end
+    end    
+end
